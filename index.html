@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Famille Godéyorouwa — Cotisations</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #111418; font-family: Georgia, 'Times New Roman', serif; }
+    ::-webkit-scrollbar { width: 6px; } 
+    ::-webkit-scrollbar-track { background: #111418; }
+    ::-webkit-scrollbar-thumb { background: #2a3245; border-radius: 3px; }
+    input, select, textarea, button { font-family: inherit; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useMemo } = React;
+
+const COTISATION_MENSUELLE = 2000;
+const MOIS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+const NOW = new Date();
+const CURRENT_YEAR = NOW.getFullYear();
+const CURRENT_MONTH = NOW.getMonth();
+
+const INIT_MEMBERS = [
+  { id: 1, prenom: "Jean",  nom: "Godéyorouwa", telephone: "+229 97 00 00 01", genre: "H" },
+  { id: 2, prenom: "Marie", nom: "Godéyorouwa", telephone: "+229 97 00 00 02", genre: "F" },
+  { id: 3, prenom: "Paul",  nom: "Godéyorouwa", telephone: "+229 97 00 00 03", genre: "H" },
+  { id: 4, prenom: "Aïcha", nom: "Godéyorouwa", telephone: "+229 97 00 00 04", genre: "F" },
+  { id: 5, prenom: "Kofi",  nom: "Godéyorouwa", telephone: "+229 97 00 00 05", genre: "H" },
+  { id: 6, prenom: "Ama",   nom: "Godéyorouwa", telephone: "+229 97 00 00 06", genre: "F" },
+];
+
+const INIT_PAYMENTS = {
+  "1_2026_0": true, "1_2026_1": true, "1_2026_2": true,
+  "2_2026_0": true, "2_2026_1": true,
+  "3_2026_0": true, "3_2026_1": true, "3_2026_2": true, "3_2026_3": true,
+  "4_2026_0": true,
+  "5_2026_0": true, "5_2026_1": true,
+  "6_2026_0": true,
+};
+
+const C = {
+  bg: "#111418", surface: "#181d24", card: "#1e242e", border: "#2a3245",
+  text: "#f0ece4", muted: "#9aa5b8",
+  gold: "#e0b84e", goldLight: "#f5d070",
+  green: "#4dc98a", greenBg: "#102818",
+  red: "#e05555", redBg: "#2a1010",
+  blue: "#5aa0e0", blueBg: "#101e30",
+};
+
+const fmt = (n) => new Intl.NumberFormat("fr-FR").format(n) + " F";
+
+function Stat({ label, value, sub, color, icon }) {
+  color = color || C.gold;
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 20px" }}>
+      <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
+      <div style={{ color, fontWeight: 900, fontSize: 24, lineHeight: 1, marginBottom: 4 }}>{value}</div>
+      <div style={{ color: C.text, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: 0.75 }}>{label}</div>
+      {sub && <div style={{ color: C.text, fontSize: 12, marginTop: 4, opacity: 0.65 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function Tag({ children, color, bg }) {
+  return (
+    <span style={{ background: bg, color, border: `1px solid ${color}44`, borderRadius: 20,
+      padding: "2px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+      {children}
+    </span>
+  );
+}
+
+function GoldBtn({ children, onClick, small, danger, disabled }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      background: danger ? `linear-gradient(135deg,${C.red},#e06060)` : disabled ? C.border : `linear-gradient(135deg,${C.gold},${C.goldLight})`,
+      border: "none", borderRadius: 8, padding: small ? "6px 12px" : "10px 20px",
+      color: disabled ? C.muted : danger ? "#fff" : "#1a0e00",
+      fontWeight: 800, fontSize: small ? 12 : 13, cursor: disabled ? "default" : "pointer",
+      letterSpacing: 0.3,
+    }}>{children}</button>
+  );
+}
+
+const inputStyle = {
+  background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8,
+  padding: "9px 13px", color: C.text, fontSize: 13, outline: "none",
+  width: "100%", boxSizing: "border-box",
+};
+
+// ── TABLEAU DE BORD ──────────────────────────────────────────────────────────
+function Dashboard({ members, payments, selectedYear }) {
+  const monthsPassed = selectedYear < CURRENT_YEAR ? 12 : selectedYear > CURRENT_YEAR ? 0 : CURRENT_MONTH + 1;
+  const totalAttendu = members.length * monthsPassed * COTISATION_MENSUELLE;
+  let totalPercu = 0, payeurs = 0, retardataires = 0;
+  members.forEach(m => {
+    let paid = 0;
+    for (let mo = 0; mo < monthsPassed; mo++) {
+      if (payments[`${m.id}_${selectedYear}_${mo}`]) paid++;
+    }
+    totalPercu += paid * COTISATION_MENSUELLE;
+    if (paid === monthsPassed) payeurs++;
+    else if (paid < monthsPassed) retardataires++;
+  });
+  const totalReste = totalAttendu - totalPercu;
+  const taux = totalAttendu > 0 ? Math.round((totalPercu / totalAttendu) * 100) : 0;
+
+  return (
+    <div>
+      <h2 style={{ color: C.gold, fontSize: 18, fontWeight: 800, margin: "0 0 20px" }}>
+        📊 Tableau de bord — {selectedYear}
+      </h2>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginBottom: 20 }}>
+        <Stat icon="💰" label="Total perçu" value={fmt(totalPercu)} sub={`sur ${fmt(totalAttendu)} attendus`} color={C.green} />
+        <Stat icon="⏳" label="Reste à collecter" value={fmt(totalReste)} color={C.red} />
+        <Stat icon="✅" label="À jour" value={`${payeurs} membre${payeurs > 1 ? "s" : ""}`} color={C.green} />
+        <Stat icon="⚠️" label="En retard" value={`${retardataires} membre${retardataires > 1 ? "s" : ""}`} color={C.red} />
+      </div>
+
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 20px", marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>Taux de recouvrement</span>
+          <span style={{ color: C.gold, fontWeight: 900, fontSize: 16 }}>{taux}%</span>
+        </div>
+        <div style={{ background: C.border, borderRadius: 99, height: 10, overflow: "hidden" }}>
+          <div style={{
+            height: "100%", borderRadius: 99, width: `${taux}%`,
+            background: taux >= 80 ? `linear-gradient(90deg,${C.green},#5dd4a0)` : taux >= 50 ? `linear-gradient(90deg,${C.gold},${C.goldLight})` : `linear-gradient(90deg,${C.red},#e07070)`,
+          }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+          <span style={{ color: C.text, fontSize: 11, opacity: 0.6 }}>0 F</span>
+          <span style={{ color: C.text, fontSize: 11, opacity: 0.6 }}>{fmt(totalAttendu)}</span>
+        </div>
+      </div>
+
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 20px" }}>
+        <h3 style={{ color: C.text, fontSize: 14, fontWeight: 800, margin: "0 0 14px" }}>Récapitulatif mensuel</h3>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {MOIS.slice(0, monthsPassed).map((mois, mo) => {
+            let count = 0;
+            members.forEach(m => { if (payments[`${m.id}_${selectedYear}_${mo}`]) count++; });
+            const pct = members.length > 0 ? Math.round((count / members.length) * 100) : 0;
+            return (
+              <div key={mo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ color: C.text, fontSize: 12, minWidth: 80, opacity: 0.85 }}>{mois}</span>
+                <div style={{ flex: 1, background: C.border, borderRadius: 99, height: 6, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: pct === 100 ? C.green : pct >= 50 ? C.gold : C.red }} />
+                </div>
+                <span style={{ color: C.text, fontSize: 12, minWidth: 100, textAlign: "right" }}>{fmt(count * COTISATION_MENSUELLE)}</span>
+                <span style={{ color: C.muted, fontSize: 11, minWidth: 40 }}>{count}/{members.length}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── COTISATIONS ──────────────────────────────────────────────────────────────
+function Cotisations({ members, payments, setPayments, selectedYear }) {
+  const monthsPassed = selectedYear < CURRENT_YEAR ? 12 : selectedYear > CURRENT_YEAR ? 0 : CURRENT_MONTH + 1;
+  const [filterStatus, setFilterStatus] = useState("Tous");
+  const [expandedId, setExpandedId] = useState(null);
+
+  const memberStats = members.map(m => {
+    let paid = 0;
+    const moisDus = [];
+    for (let mo = 0; mo < monthsPassed; mo++) {
+      if (payments[`${m.id}_${selectedYear}_${mo}`]) paid++;
+      else moisDus.push(mo);
+    }
+    const total = paid * COTISATION_MENSUELLE;
+    const reste = moisDus.length * COTISATION_MENSUELLE;
+    const status = moisDus.length === 0 ? "À jour" : paid === 0 ? "Aucun paiement" : "Partiel";
+    return { ...m, paid, total, reste, moisDus, status };
+  });
+
+  const filtered = filterStatus === "Tous" ? memberStats
+    : filterStatus === "À jour" ? memberStats.filter(m => m.status === "À jour")
+    : memberStats.filter(m => m.status !== "À jour");
+
+  const togglePayment = (memberId, mo) => {
+    const key = `${memberId}_${selectedYear}_${mo}`;
+    setPayments(p => { const n = { ...p }; if (n[key]) delete n[key]; else n[key] = true; return n; });
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+        <h2 style={{ color: C.gold, fontSize: 18, fontWeight: 800, margin: 0 }}>💳 Cotisations — {selectedYear}</h2>
+        <div style={{ display: "flex", gap: 6 }}>
+          {["Tous", "À jour", "En retard"].map(f => (
+            <button key={f} onClick={() => setFilterStatus(f)} style={{
+              background: filterStatus === f ? C.gold + "22" : "transparent",
+              border: `1px solid ${filterStatus === f ? C.gold : C.border}`,
+              borderRadius: 8, padding: "5px 12px", cursor: "pointer",
+              color: filterStatus === f ? C.gold : C.text,
+              fontSize: 12, fontWeight: filterStatus === f ? 700 : 400,
+            }}>{f}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 90px 100px 32px",
+          background: C.surface, padding: "10px 18px", borderBottom: `1px solid ${C.border}` }}>
+          {["Membre","Payé","Attendu","Reste","Statut",""].map((h, i) => (
+            <span key={i} style={{ color: C.text, fontSize: 11, fontWeight: 700, letterSpacing: 1, opacity: 0.65 }}>{h}</span>
+          ))}
+        </div>
+
+        {filtered.length === 0 && <div style={{ padding: 32, textAlign: "center", color: C.muted }}>Aucun membre</div>}
+
+        {filtered.map((m, idx) => {
+          const exp = expandedId === m.id;
+          const statusColor = m.status === "À jour" ? C.green : m.status === "Aucun paiement" ? C.red : C.gold;
+          const statusBg = m.status === "À jour" ? C.greenBg : m.status === "Aucun paiement" ? C.redBg : C.blueBg;
+          return (
+            <div key={m.id} style={{ borderBottom: idx < filtered.length - 1 ? `1px solid ${C.border}` : "none" }}>
+              <div onClick={() => setExpandedId(exp ? null : m.id)}
+                style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 90px 100px 32px",
+                  padding: "13px 18px", alignItems: "center", cursor: "pointer",
+                  background: exp ? C.surface : "transparent" }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: C.text, fontSize: 14 }}>{m.prenom} {m.nom}</div>
+                  <div style={{ color: C.text, fontSize: 11, marginTop: 2, opacity: 0.65 }}>{m.paid}/{monthsPassed} mois payés</div>
+                </div>
+                <span style={{ color: C.green, fontWeight: 700, fontSize: 13 }}>{fmt(m.total)}</span>
+                <span style={{ color: C.muted, fontSize: 13 }}>{fmt(monthsPassed * COTISATION_MENSUELLE)}</span>
+                <span style={{ color: m.reste > 0 ? C.red : C.green, fontWeight: 700, fontSize: 13 }}>{fmt(m.reste)}</span>
+                <Tag color={statusColor} bg={statusBg}>{m.status}</Tag>
+                <span style={{ color: C.muted, fontSize: 12 }}>{exp ? "▲" : "▼"}</span>
+              </div>
+              {exp && (
+                <div style={{ padding: "14px 18px 18px", background: C.bg, borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 12, color: C.text, marginBottom: 10, fontWeight: 700, opacity: 0.7, letterSpacing: 1 }}>
+                    MOIS — Cliquez pour marquer payé / non payé
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {MOIS.map((mois, mo) => {
+                      const future = mo >= monthsPassed;
+                      const paid = payments[`${m.id}_${selectedYear}_${mo}`];
+                      return (
+                        <button key={mo} onClick={() => !future && togglePayment(m.id, mo)} disabled={future} style={{
+                          background: future ? C.surface : paid ? C.greenBg : C.redBg,
+                          border: `1px solid ${future ? C.border : paid ? C.green : C.red}`,
+                          borderRadius: 8, padding: "7px 12px", cursor: future ? "default" : "pointer",
+                          color: future ? C.muted : paid ? C.green : C.red,
+                          fontSize: 12, fontWeight: 700, opacity: future ? 0.4 : 1,
+                        }}>
+                          {future ? "" : paid ? "✓" : "✗"} {mois}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── MEMBRES ──────────────────────────────────────────────────────────────────
+function Membres({ members, setMembers }) {
+  const [form, setForm] = useState({ prenom: "", nom: "Godéyorouwa", telephone: "", genre: "H" });
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const save = () => {
+    if (!form.prenom.trim()) return;
+    if (editing) {
+      setMembers(ms => ms.map(m => m.id === editing ? { ...form, id: m.id } : m));
+      setEditing(null);
+    } else {
+      setMembers(ms => [...ms, { ...form, id: Date.now() }]);
+    }
+    setForm({ prenom: "", nom: "Godéyorouwa", telephone: "", genre: "H" });
+    setAdding(false);
+  };
+
+  const startEdit = (m) => { setForm(m); setEditing(m.id); setAdding(true); };
+  const remove = (id) => { if (confirm("Supprimer ce membre ?")) setMembers(ms => ms.filter(m => m.id !== id)); };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+        <h2 style={{ color: C.gold, fontSize: 18, fontWeight: 800, margin: 0 }}>👥 Membres ({members.length})</h2>
+        <GoldBtn onClick={() => { setAdding(a => !a); setEditing(null); setForm({ prenom: "", nom: "Godéyorouwa", telephone: "", genre: "H" }); }}>
+          {adding && !editing ? "✕ Annuler" : "+ Ajouter"}
+        </GoldBtn>
+      </div>
+
+      {adding && (
+        <div style={{ background: C.card, border: `1px solid ${C.gold}44`, borderRadius: 14, padding: 20, marginBottom: 18 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+            <div>
+              <label style={{ color: C.muted, fontSize: 11, fontWeight: 700, display: "block", marginBottom: 5 }}>PRÉNOM *</label>
+              <input value={form.prenom} onChange={e => set("prenom", e.target.value)} placeholder="Prénom" style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ color: C.muted, fontSize: 11, fontWeight: 700, display: "block", marginBottom: 5 }}>NOM</label>
+              <input value={form.nom} onChange={e => set("nom", e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ color: C.muted, fontSize: 11, fontWeight: 700, display: "block", marginBottom: 5 }}>TÉLÉPHONE</label>
+              <input value={form.telephone} onChange={e => set("telephone", e.target.value)} placeholder="+229 …" style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ color: C.muted, fontSize: 11, fontWeight: 700, display: "block", marginBottom: 5 }}>GENRE</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[["H","👨 Homme"],["F","👩 Femme"]].map(([v, l]) => (
+                  <button key={v} onClick={() => set("genre", v)} style={{
+                    flex: 1, padding: "9px", borderRadius: 8, cursor: "pointer",
+                    background: form.genre === v ? C.gold + "22" : "transparent",
+                    border: `1px solid ${form.genre === v ? C.gold : C.border}`,
+                    color: form.genre === v ? C.gold : C.muted, fontWeight: 700, fontSize: 13,
+                  }}>{l}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <GoldBtn onClick={save}>{editing ? "✓ Enregistrer" : "+ Ajouter"}</GoldBtn>
+            <button onClick={() => { setAdding(false); setEditing(null); }} style={{
+              background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8,
+              padding: "9px 16px", color: C.muted, cursor: "pointer", fontSize: 13,
+            }}>Annuler</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {members.map((m, i) => (
+          <div key={m.id} style={{
+            background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
+            padding: "14px 18px", display: "flex", alignItems: "center", gap: 14,
+          }}>
+            <div style={{
+              width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
+              background: C.surface, border: `2px solid ${C.gold}44`,
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20,
+            }}>{m.genre === "F" ? "👩" : "👨"}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, color: C.text, fontSize: 15 }}>{m.prenom} {m.nom}</div>
+              {m.telephone && <div style={{ color: C.text, fontSize: 12, marginTop: 2, opacity: 0.65 }}>📞 {m.telephone}</div>}
+            </div>
+            <div style={{ color: C.gold, fontSize: 12, fontWeight: 700 }}>Membre #{i + 1}</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => startEdit(m)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "5px 10px", color: C.muted, cursor: "pointer", fontSize: 14 }}>✎</button>
+              <button onClick={() => remove(m.id)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "5px 10px", color: C.red, cursor: "pointer", fontSize: 14 }}>✕</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── APP SHELL ────────────────────────────────────────────────────────────────
+const TABS = [
+  { id: "dashboard", label: "Tableau de bord", icon: "📊" },
+  { id: "cotisations", label: "Cotisations", icon: "💳" },
+  { id: "membres", label: "Membres", icon: "👥" },
+];
+
+function App() {
+  const [tab, setTab] = useState("dashboard");
+  const [members, setMembers] = useState(() => {
+    try {
+      const saved = localStorage.getItem("godeyorouwa_members");
+      return saved ? JSON.parse(saved) : INIT_MEMBERS;
+    } catch { return INIT_MEMBERS; }
+  });
+  const [payments, setPayments] = useState(() => {
+    try {
+      const saved = localStorage.getItem("godeyorouwa_payments");
+      return saved ? JSON.parse(saved) : INIT_PAYMENTS;
+    } catch { return INIT_PAYMENTS; }
+  });
+  const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR);
+
+  React.useEffect(() => {
+    try { localStorage.setItem("godeyorouwa_members", JSON.stringify(members)); } catch {}
+  }, [members]);
+
+  React.useEffect(() => {
+    try { localStorage.setItem("godeyorouwa_payments", JSON.stringify(payments)); } catch {}
+  }, [payments]);
+
+  const years = useMemo(() => {
+    const ys = new Set([2022, 2023, 2024, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1]);
+    return [...ys].sort((a, b) => b - a);
+  }, []);
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.text }}>
+
+      {/* Header */}
+      <div style={{
+        background: `linear-gradient(180deg,#0c1018 0%,${C.bg} 100%)`,
+        borderBottom: `1px solid ${C.border}`, padding: "20px 20px 0",
+        position: "sticky", top: 0, zIndex: 20,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 10, color: C.gold, letterSpacing: 3, fontWeight: 700 }}>GESTION DES COTISATIONS</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: C.text }}>
+              Famille <span style={{ color: C.gold }}>Godéyorouwa</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+            {years.map(y => (
+              <button key={y} onClick={() => setSelectedYear(y)} style={{
+                background: selectedYear === y ? C.gold : "transparent",
+                border: "none", padding: "7px 16px", cursor: "pointer",
+                color: selectedYear === y ? "#1a0e00" : C.text,
+                fontWeight: selectedYear === y ? 900 : 400, fontSize: 13, opacity: selectedYear === y ? 1 : 0.7,
+              }}>{y}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 0, overflowX: "auto" }}>
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              background: "transparent", border: "none",
+              borderBottom: tab === t.id ? `2px solid ${C.gold}` : "2px solid transparent",
+              padding: "10px 16px", cursor: "pointer",
+              color: tab === t.id ? C.gold : C.text,
+              fontWeight: tab === t.id ? 800 : 400, fontSize: 13,
+              display: "flex", alignItems: "center", gap: 6,
+              opacity: tab === t.id ? 1 : 0.65, whiteSpace: "nowrap",
+            }}>{t.icon} {t.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Info bar */}
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "8px 20px", display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ color: C.text, fontSize: 12, opacity: 0.75 }}>💰 Cotisation : <strong style={{ color: C.gold }}>{fmt(COTISATION_MENSUELLE)} / membre</strong></span>
+        <span style={{ color: C.muted }}>·</span>
+        <span style={{ color: C.text, fontSize: 12, opacity: 0.75 }}>{members.length} membres</span>
+        <span style={{ color: C.muted }}>·</span>
+        <span style={{ color: C.text, fontSize: 12, opacity: 0.75 }}>Attendu/mois : <strong style={{ color: C.text }}>{fmt(members.length * COTISATION_MENSUELLE)}</strong></span>
+        <span style={{ color: C.muted }}>·</span>
+        <span style={{ color: C.green, fontSize: 12 }}>💾 Sauvegarde automatique active</span>
+        <button onClick={() => {
+          if (confirm("Réinitialiser toutes les données (membres et paiements) ? Cette action est irréversible.")) {
+            localStorage.removeItem("godeyorouwa_members");
+            localStorage.removeItem("godeyorouwa_payments");
+            window.location.reload();
+          }
+        }} style={{
+          marginLeft: "auto", background: "none", border: `1px solid ${C.border}`,
+          borderRadius: 6, padding: "3px 10px", color: C.muted, fontSize: 11, cursor: "pointer",
+        }}>↺ Réinitialiser</button>
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: "24px 20px", maxWidth: 900, margin: "0 auto" }}>
+        {tab === "dashboard"    && <Dashboard  members={members} payments={payments} selectedYear={selectedYear} />}
+        {tab === "cotisations"  && <Cotisations members={members} payments={payments} setPayments={setPayments} selectedYear={selectedYear} />}
+        {tab === "membres"      && <Membres    members={members} setMembers={setMembers} />}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
